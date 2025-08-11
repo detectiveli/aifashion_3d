@@ -1,63 +1,22 @@
-# Body Model Visualizer
+# Body Model Visualizer with Anthropometry Analysis
 
 ### Introduction
 
-This is a simple Open3D-based GUI for SMPL-family body models. This GUI lets you
-play with the shape, expression, and pose parameters of SMPL, SMPL-X, MANO, FLAME
-body models. Features include:
+This is an enhanced Open3D-based GUI for SMPL-family body models, integrated with anthropometry analysis capabilities. This tool allows you to:
 
-- Interactive editing of shape, expression, pose parameters
-
-
-https://user-images.githubusercontent.com/6137870/147476574-983063a8-233b-400c-bd64-7d946578919b.mp4
-
-
+- Interactive editing of shape, expression, and pose parameters
 - Visualize body model joints and joint names
-
-
-https://user-images.githubusercontent.com/6137870/147476577-39cd3a59-1add-4e2d-8c87-406ef964b558.mp4
-
-
 - Simple IK solver to match an input pose
-
-
-https://user-images.githubusercontent.com/6137870/147476585-9bbc0018-9220-4efa-9f4f-f37fdcf35db9.mp4
-
-
 - Save edited model parameters
-
-
-https://user-images.githubusercontent.com/6137870/147476590-d1b3e275-207e-4b30-99d6-0386f5ab74c5.mp4
-
-
-- View controls
-
-
-https://user-images.githubusercontent.com/6137870/147476594-cf244338-c841-4f17-a221-98038fdd9f4a.mp4
-
-
-- Lighting controls
-
-
-https://user-images.githubusercontent.com/6137870/147476612-ccd73006-4e7d-4caf-ae99-50418444f1fa.mp4
-
-
-- Material settings
-
-
-https://user-images.githubusercontent.com/6137870/147476625-8d019582-2a15-41f8-ae7f-93435e7e2529.mp4
-
-
+- View controls, lighting controls, and material settings
 - Web visualization support
+- Anthropometry data calculation and visualization
 
-Even though there are existing Blender/Unity plugins for these models, our main
-audience here is researchers who would like to quickly edit/visualize body models
-without the need to install a graphics software.
-
+This tool is designed for researchers and developers working with 3D body models who need quick editing, visualization, and anthropometric analysis capabilities without installing complex graphics software.
 
 ## Installation
 
-Clone the repo and install the requirements (use python3.9).
+Clone the repo and install the requirements (use python3.9):
 
 ```shell
 pip install -r requirements.txt
@@ -77,18 +36,18 @@ Copy downloaded files under `data/body_models`, this folder should look like:
 data
 └── body_models
     ├── flame
-    │   ├── FLAME_FEMALE.pkl
-    │   ├── FLAME_MALE.pkl
-    │   ├── FLAME_NEUTRAL.pkl
-    │   ├── flame_dynamic_embedding.npy
-    │   └── flame_static_embedding.pkl
+    │   ├── FLAME_FEMALE.pkl
+    │   ├── FLAME_MALE.pkl
+    │   ├── FLAME_NEUTRAL.pkl
+    │   ├── flame_dynamic_embedding.npy
+    │   └── flame_static_embedding.pkl
     ├── mano
-    │   ├── MANO_LEFT.pkl
-    │   └── MANO_RIGHT.pkl
+    │   ├── MANO_LEFT.pkl
+    │   └── MANO_RIGHT.pkl
     ├── smpl
-    │   ├── SMPL_FEMALE.pkl
-    │   ├── SMPL_MALE.pkl
-    │   └── SMPL_NEUTRAL.pkl
+    │   ├── SMPL_FEMALE.pkl
+    │   ├── SMPL_MALE.pkl
+    │   └── SMPL_NEUTRAL.pkl
     └── smplx
         ├── SMPLX_FEMALE.npz
         ├── SMPLX_MALE.npz
@@ -114,3 +73,22 @@ python dictionary with below keys:
 dict_keys(['betas', 'expression', 'gender', 'body_model', 
            'joints', 'body_pose', 'global_orient'])
 ```
+
+### Anthropometry Analysis
+This tool includes capabilities to calculate and visualize anthropometric measurements based on the body model. The measurements are calculated using the `SMPL-Anthropometry-master` module integrated into this project.
+
+## Todo List
+
+1. Add support for SMPLX files generated from the method provided in [https://github.com/vchoutas/smplx](https://github.com/vchoutas/smplx)
+2. Improve the test result visualization page, add lines to connect joints
+3. Optimize the calculation speed of body parameters
+4. add manual point measurement
+
+## Acknowledgements
+
+This project is built upon two main code repositories:
+
+1. **Body Model Visualizer**: Original code for visualizing SMPL-family body models. https://github.com/mkocabas/body-model-visualizer
+2. **SMPL-Anthropometry**: Anthropometric measurement calculation module integrated into this project. https://github.com/DavidBoja/SMPL-Anthropometry
+
+We would like to express our gratitude to the authors and contributors of these original code bases for their valuable work.
