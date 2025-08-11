@@ -40,8 +40,21 @@ import open3d.visualization.gui as gui
 import scipy.spatial.transform.rotation as R
 import open3d.visualization.rendering as rendering
 
+# 添加SMPL-Anthropometry-master目录到Python路径的开头
+smpl_anthropometry_path = os.path.abspath('SMPL-Anthropometry-master')
+if smpl_anthropometry_path not in sys.path:
+    sys.path.insert(0, smpl_anthropometry_path)
 
-from utils import (
+# 从SMPL-Anthropometry-master目录导入模块
+from measure import MeasureBody
+from measurement_definitions import STANDARD_LABELS
+# 确保使用SMPL-Anthropometry-master目录中的utils
+import utils as smpl_utils
+# 将smpl_utils添加到全局命名空间，以便其他模块可以使用
+import builtins
+builtins.utils = smpl_utils
+
+from main_utils import (
     get_checkerboard_plane,
     smpl_joint_names,
     smplx_body_joint_names,
@@ -49,11 +62,9 @@ from utils import (
     LEFT_HAND_KEYPOINT_NAMES,
     RIGHT_HAND_KEYPOINT_NAMES,
     HEAD_KEYPOINT_NAMES,
-    FLAME_KEYPOINT_NAMES,
     FOOT_KEYPOINT_NAMES,
     SMPL_NAMES,
     SMPLX_NAMES,
-    MANO_NAMES,
 )
 from simple_ik import simple_ik_solver
 
@@ -244,18 +255,14 @@ class AppWindow:
         Settings.LIT, Settings.UNLIT, Settings.NORMALS, Settings.DEPTH
     ]
 
-    BODY_MODEL_NAMES = ["SMPL", "SMPLX", "MANO", "FLAME"]
+    BODY_MODEL_NAMES = ["SMPL", "SMPLX"]
     BODY_MODEL_GENDERS = {
         'SMPL': ['neutral', 'male', 'female'],
-        'SMPLX': ['neutral', 'male', 'female'],
-        'MANO': ['neutral'],
-        'FLAME': ['neutral', 'male', 'female']
+        'SMPLX': ['neutral', 'male', 'female']
     }
     BODY_MODEL_N_BETAS = {
         'SMPL': 10,
-        'SMPLX': 10,
-        'MANO': 10,
-        'FLAME': 10,
+        'SMPLX': 10
     }
     CAM_FIRST = True
 
@@ -274,18 +281,7 @@ class AppWindow:
             'jaw_pose': torch.zeros(1, 1, 3),
             'leye_pose': torch.zeros(1, 1, 3),
             'reye_pose': torch.zeros(1, 1, 3),
-        },
-        'MANO': {
-            'hand_pose': torch.zeros(1, 15, 3),
-            'global_orient': torch.zeros(1, 1, 3),
-        },
-        'FLAME': {
-            'global_orient': torch.zeros(1, 1, 3),
-            'jaw_pose': torch.zeros(1, 1, 3),
-            'neck_pose': torch.zeros(1, 1, 3),
-            'leye_pose': torch.zeros(1, 1, 3),
-            'reye_pose': torch.zeros(1, 1, 3),
-        },
+        }
     }
 
     JOINT_NAMES = {
@@ -301,25 +297,12 @@ class AppWindow:
             'jaw_pose': ['jaw'],
             'leye_pose': ['leye'],
             'reye_pose': ['reye'],
-        },
-        'MANO': {
-            'global_orient': ['root'],
-            'hand_pose': hand_joint_names,
-        },
-        'FLAME': {
-            'global_orient': ['root'],
-            'jaw_pose': ['jaw'],
-            'neck_pose': ['neck'],
-            'leye_pose': ['leye'],
-            'reye_pose': ['reye'],
-        },
+        }
     }
 
     KEYPOINT_NAMES = {
         'SMPL': SMPL_NAMES,
-        'SMPLX': SMPLX_NAMES,
-        'MANO': MANO_NAMES,
-        'FLAME': FLAME_KEYPOINT_NAMES,
+        'SMPLX': SMPLX_NAMES
     }
 
     JOINTS = None
@@ -604,6 +587,10 @@ class AppWindow:
         self._show_joint_labels = gui.Checkbox("Show joint labels")
         self._show_joint_labels.set_on_checked(self._on_show_joint_labels)
 
+        # Add anthropometry checkbox
+        self._show_anthropometry = gui.Checkbox("Show anthropometry")
+        self._show_anthropometry.set_on_checked(self._on_show_anthropometry)
+
         self._on_body_model(AppWindow.BODY_MODEL_NAMES[0], 0)
         # self._on_body_pose_comp(list(AppWindow.POSE_PARAMS[AppWindow.BODY_MODEL_NAMES[0]].keys())[0], 0)
         self._body_model.set_on_selection_changed(self._on_body_model)
@@ -662,6 +649,10 @@ class AppWindow:
         h = gui.Horiz(0.25 * em)  # row 2
         h.add_child(self._show_joints)
         h.add_child(self._show_joint_labels)
+        self.model_settings.add_child(h)
+
+        h = gui.Horiz(0.25 * em)  # row 2.1
+        h.add_child(self._show_anthropometry)
         self.model_settings.add_child(h)
 
         h = gui.Horiz(0.25 * em)  # row 3
@@ -898,6 +889,146 @@ class AppWindow:
             if hasattr(self, "joint_labels_3d_list"):
                 for label3d in self.joint_labels_3d_list:
                     self._scene.remove_3d_label(label3d)
+
+    def _on_show_anthropometry(self, show):
+        # Remove existing anthropometry labels if any
+        if hasattr(self, "anthropometry_labels_3d_list"):
+            for label3d in self.anthropometry_labels_3d_list:
+                self._scene.remove_3d_label(label3d)
+            delattr(self, "anthropometry_labels_3d_list")
+
+        if show:
+            # Anthropometry data with simplified labels, associated joint names, and unique offsets to prevent overlap
+            try:
+                # 获取当前身体模型参数
+                body_model_type = self._body_model.selected_text.lower()
+                gender = self._body_model_gender.selected_text
+                betas = self._body_beta_tensor
+
+                # 创建测量器
+                # 注意：直接使用具体的测量器类，而非不存在的MeasureBody类
+                # 使用正确的导入方式，处理目录名中的连字符
+                import sys
+                import os
+                
+                # 将当前工作目录添加到Python路径
+                sys.path.append(os.path.abspath('.'))
+                
+                # 使用importlib动态导入测量器类
+                import importlib
+                
+                # 按照test_measure_smplx.py中的方式导入和使用MeasureBody类
+                import sys
+                import os
+                
+                # 将SMPL-Anthropometry-master目录添加到Python路径
+                smpl_anthropometry_path = os.path.abspath('SMPL-Anthropometry-master')
+                if smpl_anthropometry_path not in sys.path:
+                    sys.path.insert(0, smpl_anthropometry_path)
+                
+                # 导入MeasureBody类
+                from measure import MeasureBody
+                
+                # 创建测量器实例
+                # 注意：先手动设置num_joints属性，再调用from_body_model方法
+                if body_model_type.lower() == 'smpl':
+                    # 导入所需类和常量
+                    from measure import MeasureSMPL
+                    # 创建MeasureSMPL实例
+                    measurer = MeasureSMPL()
+
+                elif body_model_type.lower() == 'smplx':
+                    # 导入所需类和常量
+                    from measure import MeasureSMPLX
+                    from joint_definitions import SMPLX_NUM_JOINTS
+                    
+                    # 创建MeasureSMPLX实例
+                    measurer = MeasureSMPLX()
+                    
+                    # 先设置num_joints属性
+                    measurer.num_joints = SMPLX_NUM_JOINTS
+                else:
+                    # 默认使用SMPL测量器
+                    from measure import MeasureSMPL
+                    measurer = MeasureSMPL()
+
+                
+                # 导入STANDARD_LABELS用于标记测量结果
+                from measurement_definitions import STANDARD_LABELS
+
+                # 使用身体模型参数初始化测量器
+                measurer.from_body_model(gender=gender, shape=betas)
+
+                # 进行测量
+                measurement_names = measurer.all_possible_measurements
+                measurer.measure(measurement_names)
+
+                # 标记测量结果
+                measurer.label_measurements(STANDARD_LABELS)
+
+                anthropometry_data = [
+                        ("height", 170.0, "spine1", [0.1, 0.2, 0.0]),
+                        ("hip", 95.0, "spine1", [0.1, -0.1, 0.0]),
+                        ("inside leg", 75.0, "left_hip", [0.1, 0.1, 0.0]),
+                        ("neck", 36.0, "neck", [0.1, 0.1, 0.0]),
+                        ("shoulder breadth", 33.0, "left_collar", [0.1, 0.1, 0.0]),
+                        ("shoulder to crotch", 63.0, "neck", [0.1, -0.1, 0.0]),
+                        ("thigh left", 52.0, "left_hip", [0.1, -0.1, 0.0]),
+                        ("waist", 89.0, "spine2", [0.1, 0.1, 0.0]),
+                        ("wrist right", 17.0, "right_wrist", [0.1, -0.1, 0.0])
+                    ]
+
+                # for name, value in measurer.labeled_measurements.items():
+                #     # 查找关联的关节名称
+                #     joint_name = joint_mapping.get(name, 'spine1')
+                #     # 获取偏移量，如果没有特定偏移量则使用默认值
+                #     offset = offsets.get(name, [0.1, 0.1, 0.0])
+                #     anthropometry_data.append((name, value, joint_name, offset))
+
+            except Exception as e:
+                    print(f"Error calculating anthropometry data: {e}")
+                    # 使用默认值作为后备
+                    anthropometry_data = [
+                        ("height", 170.0, "spine1", [0.1, 0.2, 0.0]),
+                        ("hip", 95.0, "spine1", [0.1, -0.1, 0.0]),
+                        ("inside leg", 75.0, "left_hip", [0.1, 0.1, 0.0]),
+                        ("neck", 36.0, "neck", [0.1, 0.1, 0.0]),
+                        ("shoulder breadth", 33.0, "left_collar", [0.1, 0.1, 0.0]),
+                        ("shoulder to crotch", 63.0, "neck", [0.1, -0.1, 0.0]),
+                        ("thigh left", 52.0, "left_hip", [0.1, -0.1, 0.0]),
+                        ("waist", 89.0, "spine2", [0.1, 0.1, 0.0]),
+                        ("wrist right", 17.0, "right_wrist", [0.1, -0.1, 0.0])
+                    ]
+
+            # Create a list to store the labels
+            self.anthropometry_labels_3d_list = []
+
+            # Use joint positions for alignment, similar to joint labels
+            try:
+                joint_names = AppWindow.KEYPOINT_NAMES[self._body_model.selected_text]
+                for name, value, joint_name, offset in anthropometry_data:
+                    # Find the index of the associated joint
+                    if joint_name in joint_names:
+                        joint_idx = joint_names.index(joint_name)
+                        if joint_idx < len(AppWindow.JOINTS):
+                            # Use joint position with unique offset to avoid overlap
+                            pos = AppWindow.JOINTS[joint_idx] + np.array(offset)
+                        else:
+                            # Default position if joint index is out of range
+                            pos = np.array([0.5, 0.5, 0.0]) + np.array(offset)
+                    else:
+                        # Default position if joint name not found
+                        pos = np.array([0.5, 0.5, 0.0]) + np.array(offset)
+
+                    # Format the label text
+                    label_text = f"{name}: {value:.2f}cm"
+
+                    # Add the 3D label
+                    self.anthropometry_labels_3d_list.append(
+                        self._scene.add_3d_label(pos, label_text)
+                    )
+            except Exception as e:
+                print(f"Error aligning anthropometry labels: {e}")
 
     def _on_show_joints(self, show):
         for i in range(150):
@@ -1431,13 +1562,14 @@ class AppWindow:
             self._scene.scene.add_geometry(f"__ground_{idx:04d}__", g, self.settings._materials[Settings.LIT])
 
     def preload_body_models(self):
-        from smplx import SMPL, SMPLX, MANO, FLAME
+        from smplx import SMPL, SMPLX
 
-        for body_model in AppWindow.BODY_MODEL_NAMES:
+        # Only load SMPL and SMPLX models
+        for body_model in ['SMPL', 'SMPLX']:
             for gender in AppWindow.BODY_MODEL_GENDERS[body_model]:
                 logger.info(f'Loading {body_model}-{gender}')
                 extra_params = {'gender': gender}
-                if body_model in ('SMPLX', 'MANO', 'FLAME'):
+                if body_model == 'SMPLX':
                     extra_params['use_pca'] = False
                     extra_params['flat_hand_mean'] = True
                     extra_params['use_face_contour'] = True

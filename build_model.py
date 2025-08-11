@@ -1,6 +1,6 @@
 import open3d as o3d
 import torch
-from smplx import SMPL, SMPLH, SMPLX, MANO, FLAME
+from smplx import SMPL, SMPLH, SMPLX
 
 betas = torch.zeros(1, 10)
 global_orient = torch.zeros(1, 3)
@@ -9,10 +9,10 @@ NUM_BODY_JOINTS = 21
 NUM_HAND_JOINTS = 15
 NUM_FACE_JOINTS = 3
 
-for bm in SMPL, SMPLX, MANO, FLAME:
+for bm in SMPL, SMPLX:
 
     extra_params = {}
-    if bm.__name__ in ('SMPLX', 'MANO'):
+    if bm.__name__ == 'SMPLX':
         extra_params['use_pca'] = False
         extra_params['use_face_contour'] = True
     model = bm(f'data/body_models/{bm.__name__}', **extra_params)
@@ -30,18 +30,7 @@ for bm in SMPL, SMPLX, MANO, FLAME:
             'leye_pose': torch.zeros(1, 3),
             'reye_pose': torch.zeros(1, 3),
         }
-    elif bm.__name__ == 'MANO':
-        input_args = {
-            'hand_pose': torch.zeros(1, model.NUM_HAND_JOINTS * 3)
-        }
-    elif bm.__name__ == 'FLAME':
-        input_args = {
-            'expression': torch.zeros(1, 10),
-            'jaw_pose': torch.zeros(1, 3),
-            'neck_pose': torch.zeros(1, 3),
-            'leye_pose': torch.zeros(1, 3),
-            'reye_pose': torch.zeros(1, 3),
-        }
+
 
     model_output = model(global_orient=global_orient, betas=betas, **input_args)
     print(f'{bm.__name__} - NUM_BODY_JOINTS {model.NUM_BODY_JOINTS}, NUM_JOINTS {model.NUM_JOINTS}, NUM_BETAS {model.num_betas}')
@@ -51,9 +40,3 @@ for bm in SMPL, SMPLX, MANO, FLAME:
 
 # model = SMPLX('data/body_models/smplx', gender='female')
 # print(f'SMPLX - NUM_BODY_JOINTS {model.NUM_BODY_JOINTS}, NUM_JOINTS {model.NUM_JOINTS}, NUM_BETAS {model.num_betas}')
-#
-# model = MANO('data/body_models/mano')
-# print(f'MANO - NUM_BODY_JOINTS {model.NUM_BODY_JOINTS}, NUM_JOINTS {model.NUM_JOINTS}, NUM_BETAS {model.num_betas}')
-#
-# model = FLAME('data/body_models/flame')
-# print(f'FLAME - NUM_BODY_JOINTS {model.NUM_BODY_JOINTS}, NUM_JOINTS {model.NUM_JOINTS}, NUM_BETAS {model.num_betas}')
